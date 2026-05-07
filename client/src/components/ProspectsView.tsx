@@ -92,7 +92,8 @@ export const ProspectsView = ({ prospects, onAddProspect, onOpenProspect }: Prop
     setLeadStatus(`${prospect.companyName} was added to this session's prospect list.`);
   };
 
-  const searchPhrase = `${searchIndustry || "commercial food business"} ${searchTown || "Riverina NSW"}`.trim();
+  const searchLocation = searchTown ? `${searchTown} NSW` : "Riverina NSW";
+  const searchPhrase = `${searchIndustry || "commercial food business"} ${searchLocation}`.trim();
   const googleMapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchPhrase)}`;
   const googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(`${searchPhrase} company website contact`)}`;
 
