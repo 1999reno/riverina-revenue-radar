@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { PROSPECTS, type Prospect } from "@/lib/prospects";
+import { type Prospect } from "@/lib/prospects";
 import { Check, Mail, Phone, Linkedin, ClipboardCheck, FileText } from "lucide-react";
 
 export const FOLLOWUP_STAGES = [
@@ -44,20 +44,33 @@ type StageId = (typeof FOLLOWUP_STAGES)[number]["id"];
 type Progress = Record<string, Record<StageId, boolean>>;
 
 type Props = {
+  prospects: Prospect[];
   initialProspectId?: string | null;
 };
 
-export const FollowupsView = ({ initialProspectId }: Props) => {
+export const FollowupsView = ({ prospects, initialProspectId }: Props) => {
   const [prospectId, setProspectId] = useState<string>(
-    initialProspectId ?? PROSPECTS[0].id
+    initialProspectId ?? prospects[0]?.id ?? ""
   );
   useEffect(() => {
     if (initialProspectId) setProspectId(initialProspectId);
   }, [initialProspectId]);
 
+  useEffect(() => {
+    if (!prospects.length) return;
+    if (!prospects.some((p) => p.id === prospectId)) {
+      setProspectId(prospects[0].id);
+    }
+  }, [prospects, prospectId]);
+
+  const sortedProspects = useMemo(
+    () => [...prospects].sort((a, b) => b.leadScore - a.leadScore),
+    [prospects]
+  );
+
   const prospect = useMemo(
-    () => PROSPECTS.find((p) => p.id === prospectId) ?? PROSPECTS[0],
-    [prospectId]
+    () => prospects.find((p) => p.id === prospectId) ?? prospects[0],
+    [prospects, prospectId]
   );
 
   const [progress, setProgress] = useState<Progress>({});
@@ -112,13 +125,11 @@ export const FollowupsView = ({ initialProspectId }: Props) => {
               data-testid="select-followup-prospect"
               className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
             >
-              {[...PROSPECTS]
-                .sort((a, b) => b.leadScore - a.leadScore)
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.companyName} — {p.town}
-                  </option>
-                ))}
+              {sortedProspects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.companyName} — {p.town}
+                </option>
+              ))}
             </select>
 
             <div className="mt-5">
@@ -173,9 +184,9 @@ export const FollowupsView = ({ initialProspectId }: Props) => {
         <div className="lg:col-span-8 rounded-lg border border-card-border bg-card p-5 lg:p-7">
           <div className="flex items-end justify-between mb-5">
             <div>
-              <h2 className="text-sm font-semibold tracking-tight">{prospect.companyName}</h2>
+              <h2 className="text-sm font-semibold tracking-tight">{prospect?.companyName ?? "No prospect selected"}</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {prospect.category} · {prospect.town}
+                {prospect ? `${prospect.category} · ${prospect.town}` : "Add a prospect to begin a sequence."}
               </p>
             </div>
           </div>

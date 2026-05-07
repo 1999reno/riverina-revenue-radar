@@ -1,27 +1,28 @@
 import { useMemo } from "react";
-import { PROSPECTS, formatAUD, TIER_PRICING, CATEGORY_PRICING, type Prospect } from "@/lib/prospects";
+import { formatAUD, TIER_PRICING, CATEGORY_PRICING, type Prospect } from "@/lib/prospects";
 import { TrendingUp, Building2, Target, Sparkles, ArrowRight } from "lucide-react";
 
 type Props = {
+  prospects: Prospect[];
   onOpenProspect: (p: Prospect) => void;
   onGoToProspects: () => void;
 };
 
-export const Dashboard = ({ onOpenProspect, onGoToProspects }: Props) => {
+export const Dashboard = ({ prospects, onOpenProspect, onGoToProspects }: Props) => {
   const stats = useMemo(() => {
-    const total = PROSPECTS.length;
-    const tier1 = PROSPECTS.filter((p) => p.tier === 1).length;
-    const tier2 = PROSPECTS.filter((p) => p.tier === 2).length;
-    const tier3 = PROSPECTS.filter((p) => p.tier === 3).length;
+    const total = prospects.length || 1;
+    const tier1 = prospects.filter((p) => p.tier === 1).length;
+    const tier2 = prospects.filter((p) => p.tier === 2).length;
+    const tier3 = prospects.filter((p) => p.tier === 3).length;
     const avgScore =
-      Math.round(PROSPECTS.reduce((s, p) => s + p.leadScore, 0) / total);
+      Math.round(prospects.reduce((s, p) => s + p.leadScore, 0) / total);
     // First-month pipeline = sum of estMonthlyValue for Tier 1 + 50% of Tier 2 (a realistic
     // first-month booking assumption — top prospects converting first).
-    const tier1Value = PROSPECTS.filter((p) => p.tier === 1).reduce((s, p) => s + p.estMonthlyValue, 0);
-    const tier2Value = PROSPECTS.filter((p) => p.tier === 2).reduce((s, p) => s + p.estMonthlyValue, 0);
+    const tier1Value = prospects.filter((p) => p.tier === 1).reduce((s, p) => s + p.estMonthlyValue, 0);
+    const tier2Value = prospects.filter((p) => p.tier === 2).reduce((s, p) => s + p.estMonthlyValue, 0);
     const firstMonth = tier1Value + 0.5 * tier2Value;
 
-    const byCategory = PROSPECTS.reduce<Record<string, number>>((acc, p) => {
+    const byCategory = prospects.reduce<Record<string, number>>((acc, p) => {
       acc[p.categoryGroup] = (acc[p.categoryGroup] ?? 0) + 1;
       return acc;
     }, {});
@@ -30,11 +31,11 @@ export const Dashboard = ({ onOpenProspect, onGoToProspects }: Props) => {
       .sort((a, b) => b.count - a.count);
 
     return { total, tier1, tier2, tier3, avgScore, firstMonth, tier1Value, tier2Value, categoryMix };
-  }, []);
+  }, [prospects]);
 
   const top5 = useMemo(
-    () => [...PROSPECTS].sort((a, b) => b.leadScore - a.leadScore).slice(0, 5),
-    []
+    () => [...prospects].sort((a, b) => b.leadScore - a.leadScore).slice(0, 5),
+    [prospects]
   );
 
   return (

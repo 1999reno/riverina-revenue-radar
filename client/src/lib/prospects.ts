@@ -163,6 +163,46 @@ const estValueFor = (tier: 1 | 2 | 3, group: CategoryGroup): number => {
   return Math.round((base * mult) / 50) * 50;
 };
 
+export type ManualLeadInput = {
+  companyName: string;
+  category: string;
+  categoryGroup: CategoryGroup;
+  town: string;
+  websiteUrl?: string;
+  publicSourceUrl?: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  notes?: string;
+  leadScore?: number;
+  estMonthlyValue?: number;
+};
+
+export const createManualProspect = (input: ManualLeadInput, existingCount: number): Prospect => {
+  const score = Math.max(1, Math.min(100, Math.round(input.leadScore || 72)));
+  const tier = tierFor(score);
+  const value = input.estMonthlyValue && input.estMonthlyValue > 0
+    ? Math.round(input.estMonthlyValue)
+    : estValueFor(tier, input.categoryGroup);
+  const contactLine = [input.contactName, input.contactEmail, input.contactPhone].filter(Boolean).join(" · ");
+
+  return {
+    id: `manual-${slugify(input.companyName)}-${Date.now()}-${existingCount}`,
+    companyName: input.companyName.trim(),
+    category: input.category.trim() || input.categoryGroup,
+    categoryGroup: input.categoryGroup,
+    town: input.town.trim() || "Riverina, NSW",
+    websiteUrl: input.websiteUrl?.trim() || "",
+    publicSourceUrl: input.publicSourceUrl?.trim() || input.websiteUrl?.trim() || "",
+    whyGoodFit: input.notes?.trim() || "Manually added lead. Confirm facility size, food-safety requirements, pest pressure, decision maker and service scope during qualification.",
+    buyerTitles: contactLine ? [contactLine, "Operations Manager", "QA Manager", "Site Manager"] : ["Operations Manager", "QA Manager", "Site Manager"],
+    leadScore: score,
+    outreachAngle: input.notes?.trim() || "New manually added lead. Start with a short audit-readiness or pest-risk review offer and confirm the right site contact.",
+    tier,
+    estMonthlyValue: value,
+  };
+};
+
 export const pricingBreakdownFor = (p: Prospect): PricingBreakdown => {
   const tier = TIER_PRICING[p.tier];
   const category = CATEGORY_PRICING[p.categoryGroup];

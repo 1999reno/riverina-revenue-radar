@@ -1,32 +1,56 @@
 import { useMemo, useState } from "react";
 import {
-  PROSPECTS,
   CATEGORY_GROUPS,
-  TOWNS,
+  createManualProspect,
   formatAUD,
   type Prospect,
   type CategoryGroup,
+  type ManualLeadInput,
 } from "@/lib/prospects";
-import { Search, X, ExternalLink, ArrowUpDown } from "lucide-react";
+import { Search, X, ExternalLink, ArrowUpDown, Plus, MapPinned } from "lucide-react";
 import { tierColor } from "@/lib/scoring";
 
 type Props = {
+  prospects: Prospect[];
+  onAddProspect: (p: Prospect) => void;
   onOpenProspect: (p: Prospect) => void;
 };
 
 type Tier = "all" | 1 | 2 | 3;
 type SortKey = "score" | "value" | "name";
 
-export const ProspectsView = ({ onOpenProspect }: Props) => {
+const emptyLeadForm = (): ManualLeadInput => ({
+  companyName: "",
+  category: "",
+  categoryGroup: "Other",
+  town: "",
+  websiteUrl: "",
+  publicSourceUrl: "",
+  contactName: "",
+  contactEmail: "",
+  contactPhone: "",
+  notes: "",
+  leadScore: 72,
+  estMonthlyValue: undefined,
+});
+
+export const ProspectsView = ({ prospects, onAddProspect, onOpenProspect }: Props) => {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<"all" | CategoryGroup>("all");
   const [town, setTown] = useState<"all" | string>("all");
   const [tier, setTier] = useState<Tier>("all");
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [showAddLead, setShowAddLead] = useState(false);
+  const [leadForm, setLeadForm] = useState<ManualLeadInput>(() => emptyLeadForm());
+  const [searchIndustry, setSearchIndustry] = useState("food processor");
+  const [searchTown, setSearchTown] = useState("Griffith");
+  const [leadStatus, setLeadStatus] = useState("");
+
+  const towns = useMemo(() => Array.from(new Set(prospects.map((p) => p.town))).sort(), [prospects]);
 
   const filtered = useMemo(() => {
-    let arr = PROSPECTS.filter((p) => {
+    let arr = prospects.filter((p) => {
       if (cat !== "all" && p.categoryGroup !== cat) return false;
       if (town !== "all" && p.town !== town) return false;
       if (tier !== "all" && p.tier !== tier) return false;
@@ -50,7 +74,27 @@ export const ProspectsView = ({ onOpenProspect }: Props) => {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return arr;
-  }, [q, cat, town, tier, sortKey, sortDir]);
+  }, [prospects, q, cat, town, tier, sortKey, sortDir]);
+
+  const updateLeadForm = <K extends keyof ManualLeadInput>(key: K, value: ManualLeadInput[K]) => {
+    setLeadForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const addLead = () => {
+    if (!leadForm.companyName.trim()) {
+      setLeadStatus("Company name is required before a lead can be added.");
+      return;
+    }
+    const prospect = createManualProspect(leadForm, prospects.length);
+    onAddProspect(prospect);
+    setLeadForm(emptyLeadForm());
+    setShowAddLead(false);
+    setLeadStatus(`${prospect.companyName} was added to this session's prospect list.`);
+  };
+
+  const searchPhrase = `${searchIndustry || "commercial food business"} ${searchTown || "Riverina NSW"}`.trim();
+  const googleMapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchPhrase)}`;
+  const googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(`${searchPhrase} company website contact`)}`;
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -78,10 +122,107 @@ export const ProspectsView = ({ onOpenProspect }: Props) => {
           </div>
           <h1 className="text-xl lg:text-2xl font-bold tracking-tight">Prospects</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {filtered.length} of {PROSPECTS.length} prospects · click any row for the full account profile.
+            {filtered.length} of {prospects.length} prospects · click any row for the full account profile.
           </p>
         </div>
+        <button
+          type="button"
+          onClick={() => setShowAddLead((v) => !v)}
+          data-testid="button-toggle-add-lead"
+          className="inline-flex items-center gap-2 rounded-md bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground hover-elevate"
+        >
+          <Plus className="h-4 w-4" />
+          Add new lead
+        </button>
       </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 mb-5">
+        <section className="xl:col-span-5 rounded-lg border border-card-border bg-card p-4">
+          <div className="flex items-start gap-3">
+            <MapPinned className="h-4 w-4 text-primary mt-0.5" />
+            <div>
+              <h2 className="text-sm font-semibold">Find new leads</h2>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                Build a targeted Google or Maps search, then review results before adding a company manually.
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+            <input
+              value={searchIndustry}
+              onChange={(e) => setSearchIndustry(e.target.value)}
+              placeholder="wineries, packing sheds, food processors"
+              data-testid="input-lead-search-industry"
+              className="h-10 px-3 rounded-md border border-input bg-background text-sm"
+            />
+            <input
+              value={searchTown}
+              onChange={(e) => setSearchTown(e.target.value)}
+              placeholder="Griffith, Wagga Wagga, Leeton"
+              data-testid="input-lead-search-town"
+              className="h-10 px-3 rounded-md border border-input bg-background text-sm"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2 mt-3">
+            <a
+              href={googleMapsUrl}
+              target="_blank"
+              rel="noreferrer"
+              data-testid="link-search-google-maps"
+              className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-2 text-xs font-medium hover-elevate"
+            >
+              Search Google Maps <ExternalLink className="h-3 w-3" />
+            </a>
+            <a
+              href={googleSearchUrl}
+              target="_blank"
+              rel="noreferrer"
+              data-testid="link-search-google-web"
+              className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-2 text-xs font-medium hover-elevate"
+            >
+              Search web <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+        </section>
+
+        {showAddLead && (
+          <section className="xl:col-span-7 rounded-lg border border-card-border bg-card p-4" data-testid="panel-add-lead">
+            <h2 className="text-sm font-semibold">Add lead manually</h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Added leads appear immediately, but permanent saving still needs Emergent/database storage.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-3">
+              <input value={leadForm.companyName} onChange={(e) => updateLeadForm("companyName", e.target.value)} placeholder="Company name" data-testid="input-new-lead-company" className="h-10 px-3 rounded-md border border-input bg-background text-sm" />
+              <input value={leadForm.town} onChange={(e) => updateLeadForm("town", e.target.value)} placeholder="Town / area" data-testid="input-new-lead-town" className="h-10 px-3 rounded-md border border-input bg-background text-sm" />
+              <input value={leadForm.category} onChange={(e) => updateLeadForm("category", e.target.value)} placeholder="Industry type" data-testid="input-new-lead-category" className="h-10 px-3 rounded-md border border-input bg-background text-sm" />
+              <select value={leadForm.categoryGroup} onChange={(e) => updateLeadForm("categoryGroup", e.target.value as CategoryGroup)} data-testid="select-new-lead-category-group" className="h-10 px-3 rounded-md border border-input bg-background text-sm">
+                {CATEGORY_GROUPS.map((group) => <option key={group} value={group}>{group}</option>)}
+              </select>
+              <input value={leadForm.websiteUrl} onChange={(e) => updateLeadForm("websiteUrl", e.target.value)} placeholder="Website URL" data-testid="input-new-lead-website" className="h-10 px-3 rounded-md border border-input bg-background text-sm" />
+              <input value={leadForm.publicSourceUrl} onChange={(e) => updateLeadForm("publicSourceUrl", e.target.value)} placeholder="Source URL / listing" data-testid="input-new-lead-source" className="h-10 px-3 rounded-md border border-input bg-background text-sm" />
+              <input value={leadForm.contactName} onChange={(e) => updateLeadForm("contactName", e.target.value)} placeholder="Contact name" data-testid="input-new-lead-contact" className="h-10 px-3 rounded-md border border-input bg-background text-sm" />
+              <input value={leadForm.contactEmail} onChange={(e) => updateLeadForm("contactEmail", e.target.value)} placeholder="Email" data-testid="input-new-lead-email" className="h-10 px-3 rounded-md border border-input bg-background text-sm" />
+              <input value={leadForm.contactPhone} onChange={(e) => updateLeadForm("contactPhone", e.target.value)} placeholder="Phone" data-testid="input-new-lead-phone" className="h-10 px-3 rounded-md border border-input bg-background text-sm" />
+              <input type="number" min={1} max={100} value={leadForm.leadScore || ""} onChange={(e) => updateLeadForm("leadScore", Number(e.target.value))} placeholder="Lead score 1-100" data-testid="input-new-lead-score" className="h-10 px-3 rounded-md border border-input bg-background text-sm" />
+              <input type="number" min={0} value={leadForm.estMonthlyValue || ""} onChange={(e) => updateLeadForm("estMonthlyValue", e.target.value ? Number(e.target.value) : undefined)} placeholder="Estimated monthly value" data-testid="input-new-lead-value" className="h-10 px-3 rounded-md border border-input bg-background text-sm" />
+              <textarea value={leadForm.notes} onChange={(e) => updateLeadForm("notes", e.target.value)} placeholder="Notes, why they are a good fit, follow-up angle" data-testid="input-new-lead-notes" className="sm:col-span-2 min-h-[78px] px-3 py-2 rounded-md border border-input bg-background text-sm" />
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 mt-3">
+              <span className="text-xs text-muted-foreground">{leadStatus}</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setShowAddLead(false)} data-testid="button-cancel-add-lead" className="rounded-md border border-border px-3 py-2 text-xs font-medium hover-elevate">Cancel</button>
+                <button type="button" onClick={addLead} data-testid="button-save-new-lead" className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover-elevate">Save lead</button>
+              </div>
+            </div>
+          </section>
+        )}
+      </div>
+
+      {leadStatus && !showAddLead && (
+        <div data-testid="status-new-lead" className="mb-4 rounded-md border border-primary/25 bg-primary/10 px-4 py-3 text-sm text-foreground">
+          {leadStatus}
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="rounded-lg border border-card-border bg-card p-3 lg:p-4 mb-5">
@@ -117,7 +258,7 @@ export const ProspectsView = ({ onOpenProspect }: Props) => {
             className="md:col-span-2 h-10 px-3 rounded-md border border-input bg-background text-sm"
           >
             <option value="all">All towns</option>
-            {TOWNS.map((t) => (
+            {towns.map((t) => (
               <option key={t} value={t}>
                 {t}
               </option>

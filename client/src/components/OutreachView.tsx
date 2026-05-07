@@ -1,33 +1,59 @@
 import { useMemo, useState, useEffect } from "react";
-import { PROSPECTS, type Prospect } from "@/lib/prospects";
+import { type Prospect } from "@/lib/prospects";
 import { generateOutreach } from "@/lib/outreach";
 import { CopyButton } from "./CopyButton";
 import { Mail, Phone, Linkedin } from "lucide-react";
 
 type Props = {
+  prospects: Prospect[];
   initialProspectId?: string | null;
   onPickFromList?: () => void;
 };
 
-export const OutreachView = ({ initialProspectId }: Props) => {
+export const OutreachView = ({ prospects, initialProspectId }: Props) => {
   const [prospectId, setProspectId] = useState<string>(
-    initialProspectId ?? PROSPECTS[0].id
+    initialProspectId ?? prospects[0]?.id ?? ""
   );
   useEffect(() => {
     if (initialProspectId) setProspectId(initialProspectId);
   }, [initialProspectId]);
 
-  const prospect = useMemo(
-    () => PROSPECTS.find((p) => p.id === prospectId) ?? PROSPECTS[0],
-    [prospectId]
+  useEffect(() => {
+    if (!prospects.length) return;
+    if (!prospects.some((p) => p.id === prospectId)) {
+      setProspectId(prospects[0].id);
+    }
+  }, [prospects, prospectId]);
+
+  const sortedProspects = useMemo(
+    () => [...prospects].sort((a, b) => b.leadScore - a.leadScore),
+    [prospects]
   );
 
-  const [buyerTitle, setBuyerTitle] = useState<string>(prospect.buyerTitles[0] ?? "Operations Manager");
-  useEffect(() => {
-    setBuyerTitle(prospect.buyerTitles[0] ?? "Operations Manager");
-  }, [prospect.id]); // eslint-disable-line
+  const prospect = useMemo(
+    () => prospects.find((p) => p.id === prospectId) ?? prospects[0],
+    [prospects, prospectId]
+  );
 
-  const kit = useMemo(() => generateOutreach(prospect, buyerTitle), [prospect, buyerTitle]);
+  const [buyerTitle, setBuyerTitle] = useState<string>(prospect?.buyerTitles[0] ?? "Operations Manager");
+  useEffect(() => {
+    setBuyerTitle(prospect?.buyerTitles[0] ?? "Operations Manager");
+  }, [prospect?.id]); // eslint-disable-line
+
+  const kit = useMemo(
+    () => (prospect ? generateOutreach(prospect, buyerTitle) : null),
+    [prospect, buyerTitle]
+  );
+
+  if (!prospect || !kit) {
+    return (
+      <div className="px-5 lg:px-10 py-8 lg:py-10 max-w-[1400px]">
+        <p className="text-sm text-muted-foreground">
+          Add a prospect on the Prospects tab to generate outreach.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="px-5 lg:px-10 py-8 lg:py-10 max-w-[1400px]">
@@ -56,13 +82,11 @@ export const OutreachView = ({ initialProspectId }: Props) => {
             data-testid="select-prospect"
             className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
           >
-            {[...PROSPECTS]
-              .sort((a, b) => b.leadScore - a.leadScore)
-              .map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.companyName} — {p.town}
-                </option>
-              ))}
+            {sortedProspects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.companyName} — {p.town}
+              </option>
+            ))}
           </select>
 
           <label className="block text-xs text-muted-foreground mt-4 mb-1.5">

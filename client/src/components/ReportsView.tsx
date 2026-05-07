@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { ClipboardCheck, Printer, RotateCcw } from "lucide-react";
-import { PROSPECTS } from "@/lib/prospects";
+import type { Prospect } from "@/lib/prospects";
 import { CopyButton } from "./CopyButton";
 import { Button } from "@/components/ui/button";
 
@@ -173,7 +173,7 @@ const COMPLIANCE_ITEMS = [
   "Food Safety Program / HACCP support: records should help demonstrate monitoring, corrective action, trend review and due diligence during customer or regulator audits.",
 ];
 
-const defaultForm = (prospectId = PROSPECTS[0]?.id ?? ""): FormState => ({
+const defaultForm = (prospectId = ""): FormState => ({
   prospectId,
   reportType: "Initial inspection",
   inspectionDate: today(),
@@ -348,18 +348,21 @@ Controls: Follow current label directions, SDS, site PPE rules and food-safety c
 const complianceReportSummaryText =
   "Report supports the site pest-management file for food safety, QA, supplier audit and due-diligence records. Chemical use must be checked against current SDS, product label directions, APVMA registration or permit status, site rules and any required NSW technician licensing.";
 
-const reportTextFor = (form: FormState) => {
-  const prospect = PROSPECTS.find((p) => p.id === form.prospectId) ?? PROSPECTS[0];
+const reportTextFor = (form: FormState, prospect: Prospect | undefined) => {
   const evidence = form.evidence.length ? form.evidence.join(", ") : "Not recorded";
 
   const chemicalSummary = chemicalReportSummaryText(form);
 
+  const companyName = prospect?.companyName ?? "Selected client site";
+  const town = prospect?.town ?? "Not recorded";
+  const category = prospect?.category ?? "Not recorded";
+
   return `TELIOS PEST MANAGEMENT
 Commercial Pest Inspection Report
 
-Client site: ${prospect.companyName}
-Site area: ${prospect.town}
-Industry segment: ${prospect.category}
+Client site: ${companyName}
+Site area: ${town}
+Industry segment: ${category}
 Report type: ${form.reportType}
 Inspection date: ${formatDate(form.inspectionDate)}
 Inspector: ${form.inspectorName || "Telios Pest Management"}
@@ -425,8 +428,10 @@ const paragraphHtml = (value: string) =>
     .map((line) => `<p>${line}</p>`)
     .join("") || "<p>Not recorded</p>";
 
-const standaloneReportHtml = (form: FormState) => {
-  const prospect = PROSPECTS.find((p) => p.id === form.prospectId) ?? PROSPECTS[0];
+const standaloneReportHtml = (form: FormState, prospect: Prospect | undefined) => {
+  const companyName = prospect?.companyName ?? "Selected client site";
+  const town = prospect?.town ?? "Not recorded";
+  const category = prospect?.category ?? "Not recorded";
   const evidence = form.evidence.length ? form.evidence.join(", ") : "Not recorded";
   const chemicalSummary = chemicalReportSummaryText(form);
   const section = (title: string, body: string) => `
@@ -439,7 +444,7 @@ const standaloneReportHtml = (form: FormState) => {
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Telios Pest Inspection Report - ${escapeHtml(prospect.companyName)}</title>
+  <title>Telios Pest Inspection Report - ${escapeHtml(companyName)}</title>
   <style>
     @page { size: A4; margin: 14mm; }
     * { box-sizing: border-box; }
@@ -484,9 +489,9 @@ const standaloneReportHtml = (form: FormState) => {
       <div class="badge">${escapeHtml(form.riskLevel)} risk</div>
     </div>
     <div class="grid">
-      <div><span>Client site</span><strong>${escapeHtml(prospect.companyName)}</strong></div>
-      <div><span>Site area</span><strong>${escapeHtml(prospect.town)}</strong></div>
-      <div><span>Industry segment</span><strong>${escapeHtml(prospect.category)}</strong></div>
+      <div><span>Client site</span><strong>${escapeHtml(companyName)}</strong></div>
+      <div><span>Site area</span><strong>${escapeHtml(town)}</strong></div>
+      <div><span>Industry segment</span><strong>${escapeHtml(category)}</strong></div>
       <div><span>Report type</span><strong>${escapeHtml(form.reportType)}</strong></div>
       <div><span>Inspection date</span><strong>${escapeHtml(formatDate(form.inspectionDate))}</strong></div>
       <div><span>Inspector</span><strong>${escapeHtml(form.inspectorName || "Telios Pest Management")}</strong></div>
@@ -515,23 +520,39 @@ const standaloneReportHtml = (form: FormState) => {
 </html>`;
 };
 
-export const ReportsView = () => {
-  const [form, setForm] = useState<FormState>(() => defaultForm());
+type ReportsViewProps = {
+  prospects: Prospect[];
+};
+
+export const ReportsView = ({ prospects }: ReportsViewProps) => {
+  const [form, setForm] = useState<FormState>(() => defaultForm(prospects[0]?.id ?? ""));
   const [printStatus, setPrintStatus] = useState("");
 
-  const prospect = useMemo(
-    () => PROSPECTS.find((p) => p.id === form.prospectId) ?? PROSPECTS[0],
-    [form.prospectId]
+  const sortedProspects = useMemo(
+    () => [...prospects].sort((a, b) => b.leadScore - a.leadScore),
+    [prospects]
   );
 
-  const reportText = useMemo(() => reportTextFor(form), [form]);
+  const prospect = useMemo(
+    () => prospects.find((p) => p.id === form.prospectId) ?? prospects[0],
+    [prospects, form.prospectId]
+  );
+
+  useEffect(() => {
+    if (!prospects.length) return;
+    if (!prospects.some((p) => p.id === form.prospectId)) {
+      setForm((current) => ({ ...current, prospectId: prospects[0].id }));
+    }
+  }, [prospects, form.prospectId]);
+
+  const reportText = useMemo(() => reportTextFor(form, prospect), [form, prospect]);
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
 
   const applyTemplate = () => {
-    const defaults = segmentDefaults(prospect.category);
+    const defaults = segmentDefaults(prospect?.category ?? "");
     setForm((current) => ({
       ...current,
       areasInspected: defaults.areas,
@@ -600,7 +621,7 @@ export const ReportsView = () => {
   const chemicalReportSummary = chemicalReportSummaryText(form);
 
   const printReport = () => {
-    const html = standaloneReportHtml(form);
+    const html = standaloneReportHtml(form, prospect);
     const printWindow = window.open("", "_blank", "width=900,height=1100");
 
     if (printWindow) {
@@ -678,7 +699,7 @@ export const ReportsView = () => {
                   data-testid="select-report-prospect"
                   className="mt-1 w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
                 >
-                  {[...PROSPECTS].sort((a, b) => b.leadScore - a.leadScore).map((p) => (
+                  {sortedProspects.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.companyName} — {p.town}
                     </option>
@@ -737,8 +758,8 @@ export const ReportsView = () => {
 
             <div className="mt-4 rounded-md bg-muted/45 p-3">
               <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Selected account</div>
-              <div className="text-sm font-semibold mt-1" data-testid="text-report-company">{prospect.companyName}</div>
-              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{prospect.category} · {prospect.town}</p>
+              <div className="text-sm font-semibold mt-1" data-testid="text-report-company">{prospect?.companyName ?? "No prospect selected"}</div>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{prospect ? `${prospect.category} · ${prospect.town}` : "Add a prospect from the Prospects tab to begin a report."}</p>
               <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
                 Lead research stays out of the findings section. The report only uses what you enter from the site inspection.
               </p>
@@ -1028,9 +1049,9 @@ export const ReportsView = () => {
             </div>
 
             <div className="report-grid">
-              <div><span>Client site</span><strong>{prospect.companyName}</strong></div>
-              <div><span>Site area</span><strong>{prospect.town}</strong></div>
-              <div><span>Industry segment</span><strong>{prospect.category}</strong></div>
+              <div><span>Client site</span><strong>{prospect?.companyName ?? "Not recorded"}</strong></div>
+              <div><span>Site area</span><strong>{prospect?.town ?? "Not recorded"}</strong></div>
+              <div><span>Industry segment</span><strong>{prospect?.category ?? "Not recorded"}</strong></div>
               <div><span>Report type</span><strong>{form.reportType}</strong></div>
               <div><span>Inspection date</span><strong>{formatDate(form.inspectionDate)}</strong></div>
               <div><span>Inspector</span><strong>{form.inspectorName || "Telios Pest Management"}</strong></div>

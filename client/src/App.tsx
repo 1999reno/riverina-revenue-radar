@@ -9,33 +9,39 @@ import { FollowupsView } from "@/components/FollowupsView";
 import { PlaybookView } from "@/components/PlaybookView";
 import { AuditView } from "@/components/AuditView";
 import { ReportsView } from "@/components/ReportsView";
-import type { Prospect } from "@/lib/prospects";
+import { PROSPECTS, type Prospect } from "@/lib/prospects";
 
 function App() {
   const [section, setSection] = useState<SectionKey>("dashboard");
   const [activeProspect, setActiveProspect] = useState<Prospect | null>(null);
   const [outreachInitial, setOutreachInitial] = useState<string | null>(null);
   const [followupInitial, setFollowupInitial] = useState<string | null>(null);
+  const [prospects, setProspects] = useState<Prospect[]>(() => PROSPECTS);
 
   return (
     <ThemeProvider>
       <Shell section={section} onSection={setSection}>
         {section === "dashboard" && (
           <Dashboard
+            prospects={prospects}
             onOpenProspect={setActiveProspect}
             onGoToProspects={() => setSection("prospects")}
           />
         )}
         {section === "prospects" && (
-          <ProspectsView onOpenProspect={setActiveProspect} />
+          <ProspectsView
+            prospects={prospects}
+            onAddProspect={(prospect) => setProspects((current) => [prospect, ...current])}
+            onOpenProspect={setActiveProspect}
+          />
         )}
         {section === "outreach" && (
-          <OutreachView initialProspectId={outreachInitial} />
+          <OutreachView prospects={prospects} initialProspectId={outreachInitial} />
         )}
         {section === "followups" && (
-          <FollowupsView initialProspectId={followupInitial} />
+          <FollowupsView prospects={prospects} initialProspectId={followupInitial} />
         )}
-        {section === "reports" && <ReportsView />}
+        {section === "reports" && <ReportsView prospects={prospects} />}
         {section === "audit" && <AuditView />}
         {section === "playbook" && <PlaybookView />}
       </Shell>
