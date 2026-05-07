@@ -10,11 +10,16 @@ import {
 import { Search, X, ExternalLink, ArrowUpDown, Plus, MapPinned } from "lucide-react";
 import { tierColor } from "@/lib/scoring";
 
+type AddResult = "saved" | "session-only";
+
 type Props = {
   prospects: Prospect[];
-  onAddProspect: (p: Prospect) => void;
+  onAddProspect: (p: Prospect) => Promise<AddResult> | AddResult | void;
+  persistenceAvailable?: boolean;
   onOpenProspect: (p: Prospect) => void;
 };
+
+type SaveStatus = "idle" | "saving" | "saved" | "session-only";
 
 type Tier = "all" | 1 | 2 | 3;
 type SortKey = "score" | "value" | "name";
@@ -34,7 +39,7 @@ const emptyLeadForm = (): ManualLeadInput => ({
   estMonthlyValue: undefined,
 });
 
-export const ProspectsView = ({ prospects, onAddProspect, onOpenProspect }: Props) => {
+export const ProspectsView = ({ prospects, onAddProspect, persistenceAvailable, onOpenProspect }: Props) => {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<"all" | CategoryGroup>("all");
   const [town, setTown] = useState<"all" | string>("all");
@@ -46,6 +51,7 @@ export const ProspectsView = ({ prospects, onAddProspect, onOpenProspect }: Prop
   const [searchIndustry, setSearchIndustry] = useState("food processor");
   const [searchTown, setSearchTown] = useState("Griffith");
   const [leadStatus, setLeadStatus] = useState("");
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
 
   const towns = useMemo(() => Array.from(new Set(prospects.map((p) => p.town))).sort(), [prospects]);
 
@@ -80,18 +86,35 @@ export const ProspectsView = ({ prospects, onAddProspect, onOpenProspect }: Prop
     setLeadForm((current) => ({ ...current, [key]: value }));
   };
 
-  const addLead = () => {
+  const addLead = async () => {
     if (!leadForm.companyName.trim()) {
+      setSaveStatus("idle");
       setLeadStatus("Company name is required before a lead can be added.");
       return;
     }
     const prospect = createManualProspect(leadForm, prospects.length);
-    onAddProspect(prospect);
+    setSaveStatus("saving");
+    setLeadStatus(`Saving ${prospect.companyName}…`);
+    let result: AddResult = "session-only";
+    try {
+      const r = await onAddProspect(prospect);
+      if (r === "saved" || r === "session-only") result = r;
+      else result = persistenceAvailable ? "saved" : "session-only";
+    } catch {
+      result = "session-only";
+    }
     setLeadForm(emptyLeadForm());
     setShowAddLead(false);
-    setLeadStatus(
-      `${prospect.companyName} is now in your prospect list for this session — refreshing or closing the page will clear it until Emergent/database storage is hooked up.`
-    );
+    setSaveStatus(result);
+    if (result === "saved") {
+      setLeadStatus(
+        `${prospect.companyName} has been saved to the Emergent database and is available for everyone on the team.`,
+      );
+    } else {
+      setLeadStatus(
+        `${prospect.companyName} is now in your prospect list for this session — refreshing or closing the page will clear it until Emergent/database storage is hooked up.`,
+      );
+    }
   };
 
   const searchLocation = searchTown ? `${searchTown} NSW` : "Riverina NSW";
@@ -191,16 +214,27 @@ export const ProspectsView = ({ prospects, onAddProspect, onOpenProspect }: Prop
         {showAddLead && (
           <section className="xl:col-span-7 rounded-lg border border-card-border bg-card p-4" data-testid="panel-add-lead">
             <h2 className="text-sm font-semibold">Add lead manually</h2>
-            <div
-              data-testid="notice-session-only"
-              className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-foreground"
-            >
-              <strong className="font-semibold">Heads up — this lead is for this session only.</strong>{" "}
-              Anything you add here lives in your browser tab. If you refresh the page or close
-              this window, the new lead will be gone. Permanent saving will switch on once we
-              connect the Emergent database — until then, jot the details down in your CRM or
-              spreadsheet as well.
-            </div>
+            {persistenceAvailable ? (
+              <div
+                data-testid="notice-persistence-on"
+                className="mt-2 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2.5 text-xs leading-relaxed text-foreground"
+              >
+                <strong className="font-semibold">Database saving is on.</strong>{" "}
+                New leads you add here will be written to the Emergent database and
+                shared with everyone on the team.
+              </div>
+            ) : (
+              <div
+                data-testid="notice-session-only"
+                className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-foreground"
+              >
+                <strong className="font-semibold">Heads up — this lead is for this session only.</strong>{" "}
+                Anything you add here lives in your browser tab. If you refresh the page or close
+                this window, the new lead will be gone. Permanent saving will switch on once we
+                connect the Emergent database — until then, jot the details down in your CRM or
+                spreadsheet as well.
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-3">
               <input value={leadForm.companyName} onChange={(e) => updateLeadForm("companyName", e.target.value)} placeholder="Company name" data-testid="input-new-lead-company" className="h-10 px-3 rounded-md border border-input bg-background text-sm" />
               <input value={leadForm.town} onChange={(e) => updateLeadForm("town", e.target.value)} placeholder="Town / area" data-testid="input-new-lead-town" className="h-10 px-3 rounded-md border border-input bg-background text-sm" />
@@ -218,22 +252,49 @@ export const ProspectsView = ({ prospects, onAddProspect, onOpenProspect }: Prop
               <textarea value={leadForm.notes} onChange={(e) => updateLeadForm("notes", e.target.value)} placeholder="Notes, why they are a good fit, follow-up angle" data-testid="input-new-lead-notes" className="sm:col-span-2 min-h-[78px] px-3 py-2 rounded-md border border-input bg-background text-sm" />
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 mt-3">
-              <span className="text-xs text-muted-foreground">{leadStatus}</span>
+              <span className="text-xs text-muted-foreground" data-testid="status-add-lead-inline">{leadStatus}</span>
               <div className="flex gap-2">
                 <button type="button" onClick={() => setShowAddLead(false)} data-testid="button-cancel-add-lead" className="rounded-md border border-border px-3 py-2 text-xs font-medium hover-elevate">Cancel</button>
-                <button type="button" onClick={addLead} data-testid="button-save-new-lead" className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover-elevate">Save lead</button>
+                <button
+                  type="button"
+                  onClick={addLead}
+                  disabled={saveStatus === "saving"}
+                  data-testid="button-save-new-lead"
+                  className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover-elevate disabled:opacity-60"
+                >
+                  {saveStatus === "saving" ? "Saving…" : "Save lead"}
+                </button>
               </div>
             </div>
           </section>
         )}
       </div>
 
-      {leadStatus && !showAddLead && (
+      {leadStatus && !showAddLead && saveStatus !== "idle" && (
         <div
-          data-testid="status-new-lead"
-          className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-foreground"
+          data-testid={
+            saveStatus === "saved"
+              ? "status-new-lead-saved"
+              : saveStatus === "saving"
+                ? "status-new-lead-saving"
+                : "status-new-lead-session-only"
+          }
+          data-save-status={saveStatus}
+          className={`mb-4 rounded-md border px-4 py-3 text-sm text-foreground ${
+            saveStatus === "saved"
+              ? "border-emerald-500/40 bg-emerald-500/10"
+              : saveStatus === "saving"
+                ? "border-border bg-muted/40"
+                : "border-amber-500/40 bg-amber-500/10"
+          }`}
         >
-          <div className="font-semibold mb-0.5">Saved for this session only</div>
+          <div className="font-semibold mb-0.5">
+            {saveStatus === "saved"
+              ? "Saved to database"
+              : saveStatus === "saving"
+                ? "Saving lead…"
+                : "Saved for this session only"}
+          </div>
           <div className="text-foreground/85">{leadStatus}</div>
         </div>
       )}

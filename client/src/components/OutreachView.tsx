@@ -1,6 +1,11 @@
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { type Prospect } from "@/lib/prospects";
 import { generateOutreach } from "@/lib/outreach";
+import {
+  fetchOutreachScript,
+  saveOutreachScript,
+  type OutreachScriptOverride,
+} from "@/lib/radarApi";
 import { CopyButton } from "./CopyButton";
 import { Mail, Phone, Linkedin } from "lucide-react";
 
@@ -9,6 +14,8 @@ type Props = {
   initialProspectId?: string | null;
   onPickFromList?: () => void;
 };
+
+type SaveStatus = "idle" | "saving" | "saved" | "session-only";
 
 export const OutreachView = ({ prospects, initialProspectId }: Props) => {
   const [prospectId, setProspectId] = useState<string>(
@@ -45,20 +52,49 @@ export const OutreachView = ({ prospects, initialProspectId }: Props) => {
     [prospect, buyerTitle]
   );
 
-  // Editable copies of the generated scripts. Reset whenever the underlying
-  // generator output changes (different prospect or buyer title).
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [phoneOpener, setPhoneOpener] = useState("");
   const [linkedInNote, setLinkedInNote] = useState("");
 
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [saveMessage, setSaveMessage] = useState<string>("");
+  const [overrideAvailable, setOverrideAvailable] = useState(false);
+
+  // Reset to generated draft when kit changes; then attempt to load saved override.
   useEffect(() => {
     if (!kit) return;
     setEmailSubject(kit.email.subject);
     setEmailBody(kit.email.body);
     setPhoneOpener(kit.phoneOpener);
     setLinkedInNote(kit.linkedInNote);
+    setSaveStatus("idle");
+    setSaveMessage("");
+    setOverrideAvailable(false);
   }, [kit]);
+
+  useEffect(() => {
+    if (!prospect || !buyerTitle) return;
+    let cancelled = false;
+    fetchOutreachScript(prospect.id, buyerTitle).then((result) => {
+      if (cancelled) return;
+      if (result.status !== "available") return;
+      setOverrideAvailable(true);
+      if (result.override) {
+        setEmailSubject(result.override.emailSubject);
+        setEmailBody(result.override.emailBody);
+        setPhoneOpener(result.override.phoneOpener);
+        setLinkedInNote(result.override.linkedInNote);
+        setSaveStatus("saved");
+        setSaveMessage(
+          `Loaded the saved script for ${prospect.companyName} — ${buyerTitle}.`,
+        );
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [prospect?.id, buyerTitle]); // eslint-disable-line
 
   const resetEdits = () => {
     if (!kit) return;
@@ -66,6 +102,42 @@ export const OutreachView = ({ prospects, initialProspectId }: Props) => {
     setEmailBody(kit.email.body);
     setPhoneOpener(kit.phoneOpener);
     setLinkedInNote(kit.linkedInNote);
+    setSaveStatus("idle");
+    setSaveMessage("");
+  };
+
+  const handleSave = async () => {
+    if (!prospect) return;
+    setSaveStatus("saving");
+    setSaveMessage("Saving script edits…");
+    const override: OutreachScriptOverride = {
+      prospectId: prospect.id,
+      buyerTitle,
+      emailSubject,
+      emailBody,
+      phoneOpener,
+      linkedInNote,
+    };
+    try {
+      const result = await saveOutreachScript(override);
+      if (result.status === "saved") {
+        setSaveStatus("saved");
+        setSaveMessage(
+          `Saved to the Emergent database — these edits will load again next time you open ${prospect.companyName} for ${buyerTitle}.`,
+        );
+        setOverrideAvailable(true);
+      } else {
+        setSaveStatus("session-only");
+        setSaveMessage(
+          `Could not reach the database. Edits are kept for this session only — copy them now or they will reset on refresh.`,
+        );
+      }
+    } catch {
+      setSaveStatus("session-only");
+      setSaveMessage(
+        `Could not reach the database. Edits are kept for this session only — copy them now or they will reset on refresh.`,
+      );
+    }
   };
 
   if (!prospect || !kit) {
@@ -130,12 +202,51 @@ export const OutreachView = ({ prospects, initialProspectId }: Props) => {
 
           <button
             type="button"
+            onClick={handleSave}
+            disabled={saveStatus === "saving"}
+            data-testid="button-save-outreach"
+            className="mt-4 w-full rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover-elevate disabled:opacity-60"
+          >
+            {saveStatus === "saving" ? "Saving…" : "Save script edits"}
+          </button>
+
+          <button
+            type="button"
             onClick={resetEdits}
             data-testid="button-reset-outreach"
-            className="mt-4 w-full rounded-md border border-border px-3 py-2 text-xs font-medium hover-elevate"
+            className="mt-2 w-full rounded-md border border-border px-3 py-2 text-xs font-medium hover-elevate"
           >
             Reset to generated draft
           </button>
+
+          {saveStatus !== "idle" && saveMessage && (
+            <div
+              data-testid={
+                saveStatus === "saved"
+                  ? "status-outreach-saved"
+                  : saveStatus === "saving"
+                    ? "status-outreach-saving"
+                    : "status-outreach-session-only"
+              }
+              data-save-status={saveStatus}
+              className={`mt-3 rounded-md border px-3 py-2.5 text-xs leading-relaxed ${
+                saveStatus === "saved"
+                  ? "border-emerald-500/40 bg-emerald-500/10"
+                  : saveStatus === "saving"
+                    ? "border-border bg-muted/40"
+                    : "border-amber-500/40 bg-amber-500/10"
+              }`}
+            >
+              <strong className="font-semibold">
+                {saveStatus === "saved"
+                  ? "Saved to database."
+                  : saveStatus === "saving"
+                    ? "Saving…"
+                    : "Saved for this session only."}
+              </strong>{" "}
+              {saveMessage}
+            </div>
+          )}
 
           <div className="mt-5 rounded-md bg-muted/40 border border-border px-3.5 py-3 text-xs leading-relaxed">
             <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground mb-1.5">
@@ -144,14 +255,17 @@ export const OutreachView = ({ prospects, initialProspectId }: Props) => {
             <p className="text-foreground/85">{prospect.whyGoodFit.split(".")[0]}.</p>
           </div>
 
-          <div
-            data-testid="notice-outreach-editable"
-            className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3.5 py-3 text-xs leading-relaxed text-foreground"
-          >
-            <strong className="font-semibold">Edits stay in this session.</strong>{" "}
-            Tweak the subject, body, phone script, or LinkedIn note in the boxes on the right —
-            then hit Copy. If you refresh the page, your edits will reset to the generated draft.
-          </div>
+          {!overrideAvailable && (
+            <div
+              data-testid="notice-outreach-editable"
+              className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3.5 py-3 text-xs leading-relaxed text-foreground"
+            >
+              <strong className="font-semibold">Edits stay in this session.</strong>{" "}
+              Tweak the subject, body, phone script, or LinkedIn note in the boxes on the right —
+              then hit Copy or Save script edits. Without the database connected yet, refreshing
+              the page will reset edits to the generated draft.
+            </div>
+          )}
         </div>
 
         {/* Output — editable */}

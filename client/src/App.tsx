@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ThemeProvider } from "@/lib/theme";
 import { Shell, type SectionKey } from "@/components/Shell";
 import { Dashboard } from "@/components/Dashboard";
@@ -10,6 +10,9 @@ import { PlaybookView } from "@/components/PlaybookView";
 import { AuditView } from "@/components/AuditView";
 import { ReportsView } from "@/components/ReportsView";
 import { PROSPECTS, type Prospect } from "@/lib/prospects";
+import { createProspect, fetchProspects } from "@/lib/radarApi";
+
+export type AddProspectResult = "saved" | "session-only";
 
 function App() {
   const [section, setSection] = useState<SectionKey>("dashboard");
@@ -17,6 +20,33 @@ function App() {
   const [outreachInitial, setOutreachInitial] = useState<string | null>(null);
   const [followupInitial, setFollowupInitial] = useState<string | null>(null);
   const [prospects, setProspects] = useState<Prospect[]>(() => PROSPECTS);
+  const [persistenceAvailable, setPersistenceAvailable] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchProspects().then((result) => {
+      if (cancelled) return;
+      if (result.status === "available") {
+        setPersistenceAvailable(true);
+        if (result.prospects.length > 0) setProspects(result.prospects);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleAddProspect = async (prospect: Prospect): Promise<AddProspectResult> => {
+    setProspects((current) => [prospect, ...current]);
+    const result = await createProspect(prospect);
+    if (result.status === "saved") {
+      setProspects((current) =>
+        current.map((p) => (p.id === prospect.id ? { ...p, ...result.prospect } : p)),
+      );
+      return "saved";
+    }
+    return "session-only";
+  };
 
   return (
     <ThemeProvider>
@@ -31,7 +61,8 @@ function App() {
         {section === "prospects" && (
           <ProspectsView
             prospects={prospects}
-            onAddProspect={(prospect) => setProspects((current) => [prospect, ...current])}
+            onAddProspect={handleAddProspect}
+            persistenceAvailable={persistenceAvailable}
             onOpenProspect={setActiveProspect}
           />
         )}
