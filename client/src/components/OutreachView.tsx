@@ -45,6 +45,29 @@ export const OutreachView = ({ prospects, initialProspectId }: Props) => {
     [prospect, buyerTitle]
   );
 
+  // Editable copies of the generated scripts. Reset whenever the underlying
+  // generator output changes (different prospect or buyer title).
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [phoneOpener, setPhoneOpener] = useState("");
+  const [linkedInNote, setLinkedInNote] = useState("");
+
+  useEffect(() => {
+    if (!kit) return;
+    setEmailSubject(kit.email.subject);
+    setEmailBody(kit.email.body);
+    setPhoneOpener(kit.phoneOpener);
+    setLinkedInNote(kit.linkedInNote);
+  }, [kit]);
+
+  const resetEdits = () => {
+    if (!kit) return;
+    setEmailSubject(kit.email.subject);
+    setEmailBody(kit.email.body);
+    setPhoneOpener(kit.phoneOpener);
+    setLinkedInNote(kit.linkedInNote);
+  };
+
   if (!prospect || !kit) {
     return (
       <div className="px-5 lg:px-10 py-8 lg:py-10 max-w-[1400px]">
@@ -65,8 +88,8 @@ export const OutreachView = ({ prospects, initialProspectId }: Props) => {
           Email · phone opener · LinkedIn note
         </h1>
         <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-          Pick a prospect and a buyer title. Output is plain text, short, and free of spammy
-          language — paste straight into your CRM or inbox.
+          Pick a prospect and a buyer title. Tweak any line below before you copy — the copy
+          button always grabs your edited version, not the original draft.
         </p>
       </div>
 
@@ -105,83 +128,160 @@ export const OutreachView = ({ prospects, initialProspectId }: Props) => {
             ))}
           </select>
 
+          <button
+            type="button"
+            onClick={resetEdits}
+            data-testid="button-reset-outreach"
+            className="mt-4 w-full rounded-md border border-border px-3 py-2 text-xs font-medium hover-elevate"
+          >
+            Reset to generated draft
+          </button>
+
           <div className="mt-5 rounded-md bg-muted/40 border border-border px-3.5 py-3 text-xs leading-relaxed">
             <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground mb-1.5">
               Why this account
             </div>
             <p className="text-foreground/85">{prospect.whyGoodFit.split(".")[0]}.</p>
           </div>
+
+          <div
+            data-testid="notice-outreach-editable"
+            className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3.5 py-3 text-xs leading-relaxed text-foreground"
+          >
+            <strong className="font-semibold">Edits stay in this session.</strong>{" "}
+            Tweak the subject, body, phone script, or LinkedIn note in the boxes on the right —
+            then hit Copy. If you refresh the page, your edits will reset to the generated draft.
+          </div>
         </div>
 
-        {/* Output */}
+        {/* Output — editable */}
         <div className="lg:col-span-8 space-y-4">
-          <OutputCard
-            icon={<Mail className="h-4 w-4" />}
-            title="Cold email"
-            subtitle={`Subject: ${kit.email.subject}`}
-            body={kit.email.body}
-            testId="output-email"
-            copyValue={`Subject: ${kit.email.subject}\n\n${kit.email.body}`}
-          />
-          <OutputCard
-            icon={<Phone className="h-4 w-4" />}
-            title="Phone opener"
-            subtitle="Read in 12–15 seconds. Stop. Wait for them to say a name."
-            body={kit.phoneOpener}
-            testId="output-phone"
-            copyValue={kit.phoneOpener}
-          />
-          <OutputCard
-            icon={<Linkedin className="h-4 w-4" />}
-            title="LinkedIn connection note"
-            subtitle="Under 300 characters · attach to the request, no pitch in DM #1."
-            body={kit.linkedInNote}
-            testId="output-linkedin"
-            copyValue={kit.linkedInNote}
-          />
+          <section
+            className="rounded-lg border border-card-border bg-card overflow-hidden"
+            data-testid="output-email"
+          >
+            <header className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-border bg-muted/30">
+              <div className="flex items-center gap-2.5">
+                <span className="grid place-items-center h-7 w-7 rounded-md bg-background border border-border text-foreground/80">
+                  <Mail className="h-4 w-4" />
+                </span>
+                <div>
+                  <div className="text-sm font-semibold">Cold email</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Edit the subject and body, then copy.
+                  </div>
+                </div>
+              </div>
+              <CopyButton
+                value={`Subject: ${emailSubject}\n\n${emailBody}`}
+                testId="output-email-copy"
+                label="Copy"
+              />
+            </header>
+            <div className="px-5 py-4 space-y-3">
+              <div>
+                <label
+                  htmlFor="outreach-email-subject"
+                  className="block text-[11px] uppercase tracking-[0.14em] text-muted-foreground mb-1.5"
+                >
+                  Subject
+                </label>
+                <input
+                  id="outreach-email-subject"
+                  type="text"
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  data-testid="input-email-subject"
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="outreach-email-body"
+                  className="block text-[11px] uppercase tracking-[0.14em] text-muted-foreground mb-1.5"
+                >
+                  Body
+                </label>
+                <textarea
+                  id="outreach-email-body"
+                  value={emailBody}
+                  onChange={(e) => setEmailBody(e.target.value)}
+                  data-testid="textarea-email-body"
+                  className="w-full min-h-[220px] px-3 py-2 rounded-md border border-input bg-background text-sm leading-relaxed font-sans"
+                />
+              </div>
+            </div>
+          </section>
+
+          <section
+            className="rounded-lg border border-card-border bg-card overflow-hidden"
+            data-testid="output-phone"
+          >
+            <header className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-border bg-muted/30">
+              <div className="flex items-center gap-2.5">
+                <span className="grid place-items-center h-7 w-7 rounded-md bg-background border border-border text-foreground/80">
+                  <Phone className="h-4 w-4" />
+                </span>
+                <div>
+                  <div className="text-sm font-semibold">Phone opener</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Read in 12–15 seconds. Edit it to sound like you.
+                  </div>
+                </div>
+              </div>
+              <CopyButton
+                value={phoneOpener}
+                testId="output-phone-copy"
+                label="Copy"
+              />
+            </header>
+            <div className="px-5 py-4">
+              <textarea
+                value={phoneOpener}
+                onChange={(e) => setPhoneOpener(e.target.value)}
+                data-testid="textarea-phone-opener"
+                className="w-full min-h-[140px] px-3 py-2 rounded-md border border-input bg-background text-sm leading-relaxed font-sans"
+              />
+            </div>
+          </section>
+
+          <section
+            className="rounded-lg border border-card-border bg-card overflow-hidden"
+            data-testid="output-linkedin"
+          >
+            <header className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-border bg-muted/30">
+              <div className="flex items-center gap-2.5">
+                <span className="grid place-items-center h-7 w-7 rounded-md bg-background border border-border text-foreground/80">
+                  <Linkedin className="h-4 w-4" />
+                </span>
+                <div>
+                  <div className="text-sm font-semibold">LinkedIn connection note</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Under 300 characters · attach to the request, no pitch in DM #1.
+                  </div>
+                </div>
+              </div>
+              <CopyButton
+                value={linkedInNote}
+                testId="output-linkedin-copy"
+                label="Copy"
+              />
+            </header>
+            <div className="px-5 py-4">
+              <textarea
+                value={linkedInNote}
+                onChange={(e) => setLinkedInNote(e.target.value)}
+                maxLength={300}
+                data-testid="textarea-linkedin-note"
+                className="w-full min-h-[120px] px-3 py-2 rounded-md border border-input bg-background text-sm leading-relaxed font-sans"
+              />
+              <div className="mt-1.5 text-[11px] text-muted-foreground text-right">
+                {linkedInNote.length}/300
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     </div>
   );
 };
-
-const OutputCard = ({
-  icon,
-  title,
-  subtitle,
-  body,
-  testId,
-  copyValue,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  body: string;
-  testId: string;
-  copyValue: string;
-}) => (
-  <section
-    className="rounded-lg border border-card-border bg-card overflow-hidden"
-    data-testid={testId}
-  >
-    <header className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-border bg-muted/30">
-      <div className="flex items-center gap-2.5">
-        <span className="grid place-items-center h-7 w-7 rounded-md bg-background border border-border text-foreground/80">
-          {icon}
-        </span>
-        <div>
-          <div className="text-sm font-semibold">{title}</div>
-          <div className="text-[11px] text-muted-foreground">{subtitle}</div>
-        </div>
-      </div>
-      <CopyButton
-        value={copyValue}
-        testId={`${testId}-copy`}
-        label="Copy"
-      />
-    </header>
-    <pre className="px-5 py-4 text-sm leading-relaxed whitespace-pre-wrap font-sans text-foreground/90">
-      {body}
-    </pre>
-  </section>
-);

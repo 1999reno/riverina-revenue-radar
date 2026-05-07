@@ -89,7 +89,9 @@ export const ProspectsView = ({ prospects, onAddProspect, onOpenProspect }: Prop
     onAddProspect(prospect);
     setLeadForm(emptyLeadForm());
     setShowAddLead(false);
-    setLeadStatus(`${prospect.companyName} was added to this session's prospect list.`);
+    setLeadStatus(
+      `${prospect.companyName} is now in your prospect list for this session — refreshing or closing the page will clear it until Emergent/database storage is hooked up.`
+    );
   };
 
   const searchLocation = searchTown ? `${searchTown} NSW` : "Riverina NSW";
@@ -189,9 +191,16 @@ export const ProspectsView = ({ prospects, onAddProspect, onOpenProspect }: Prop
         {showAddLead && (
           <section className="xl:col-span-7 rounded-lg border border-card-border bg-card p-4" data-testid="panel-add-lead">
             <h2 className="text-sm font-semibold">Add lead manually</h2>
-            <p className="text-xs text-muted-foreground mt-1">
-              Added leads appear immediately, but permanent saving still needs Emergent/database storage.
-            </p>
+            <div
+              data-testid="notice-session-only"
+              className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-foreground"
+            >
+              <strong className="font-semibold">Heads up — this lead is for this session only.</strong>{" "}
+              Anything you add here lives in your browser tab. If you refresh the page or close
+              this window, the new lead will be gone. Permanent saving will switch on once we
+              connect the Emergent database — until then, jot the details down in your CRM or
+              spreadsheet as well.
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-3">
               <input value={leadForm.companyName} onChange={(e) => updateLeadForm("companyName", e.target.value)} placeholder="Company name" data-testid="input-new-lead-company" className="h-10 px-3 rounded-md border border-input bg-background text-sm" />
               <input value={leadForm.town} onChange={(e) => updateLeadForm("town", e.target.value)} placeholder="Town / area" data-testid="input-new-lead-town" className="h-10 px-3 rounded-md border border-input bg-background text-sm" />
@@ -220,8 +229,12 @@ export const ProspectsView = ({ prospects, onAddProspect, onOpenProspect }: Prop
       </div>
 
       {leadStatus && !showAddLead && (
-        <div data-testid="status-new-lead" className="mb-4 rounded-md border border-primary/25 bg-primary/10 px-4 py-3 text-sm text-foreground">
-          {leadStatus}
+        <div
+          data-testid="status-new-lead"
+          className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-foreground"
+        >
+          <div className="font-semibold mb-0.5">Saved for this session only</div>
+          <div className="text-foreground/85">{leadStatus}</div>
         </div>
       )}
 
